@@ -1,12 +1,42 @@
-#include "myapp.h"
+#include "myapp_SDL.h"
 
-static void glfw_error_callback(int error, const char* description) {
-    std::cerr << "Glfw error"+std::to_string(error)+
-                 ": "+std::string(description) << std::endl;
+MyApp_Error MyApp::MyApp_SDL_Init(unsigned int _w, unsigned int _h, const char *_title) {
+    MyApp_Error _err = MyApp_success;
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        std::cerr << "MyApp: Failed to initialize SDL." << std::endl;
+        std::cerr << SDL_GetError() << std::endl;
+        _err = MyApp_fail;
+    }
+    else {
+        _window = SDL_CreateWindow(_title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _w, _h, SDL_WINDOW_SHOWN);
+        if (_window == nullptr) {
+            std::cerr << "MyApp: Failed to create SDL window." << std::endl;
+            std::cerr << SDL_GetError() << std::endl;
+            _err = MyApp_fail;
+        }
+        else {
+            SDL_SetRenderDrawColor(_renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+        }
+    }
+    return _err;
 }
 
-void MyApp::initAll() {
-    glfwSetErrorCallback(glfw_error_callback);
+MyApp_Error MyApp::MyApp_SDL_Exit() {
+    SDL_DestroyRenderer(_renderer);
+    SDL_DestroyWindow(_window);
+    _window = nullptr;
+    _renderer = nullptr;
+
+    SDL_Quit();
+}
+
+
+
+MyApp_Error MyApp::MyApp_Init() {
+    MyApp_Error _err = MyApp_success;
+    if (MyApp_SDL_Init(MYAPP_WINDOW_WIDTH_DEFAULT, MYAPP_WINDOW_WIDTH_DEFAULT, "MyApp: Run") == MyApp_fail) {
+        _err = MyApp_fail;
+    }
 
     glfwInit();
 
