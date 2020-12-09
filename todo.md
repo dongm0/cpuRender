@@ -24,7 +24,12 @@
 - a2v和v2f，包括shader
 - 多边形裁剪
 
-## 我要写的
+## 要写的ver2
+### 第一阶段
+- 照着抄main.c
+- 旋转改四元数，矩阵和向量运算用eigen
+- 先不用class写，就用原有的
+### 第二阶段
 - world
 - entity
 - material
