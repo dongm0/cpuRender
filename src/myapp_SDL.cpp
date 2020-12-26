@@ -1,4 +1,7 @@
 #include "myapp_SDL.h"
+#include "rasterizer.h"
+#include "triangle.h"
+#include "OBJ_Loader.h"
 
 MyApp_Error MyApp::MyApp_SDL_Init(unsigned int _w, unsigned int _h, const char *_title) {
     MyApp_Error _err = MyApp_success;
@@ -37,7 +40,8 @@ MyApp_Error MyApp::MyApp_Init() {
     if (MyApp_SDL_Init(MYAPP_WINDOW_WIDTH_DEFAULT, MYAPP_WINDOW_WIDTH_DEFAULT, "MyApp: Run") == MyApp_fail) {
         _err = MyApp_fail;
     }
-
+    return _err;
+    /*
     glfwInit();
 
     const char* glsl_version = "#version 130";
@@ -62,9 +66,17 @@ MyApp_Error MyApp::MyApp_Init() {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
+    */
 }
 
-void MyApp::cleanUp() {
+MyApp_Error MyApp::cleanUp() {
+    MyApp_Error _err = MyApp_success;
+    if (MyApp_SDL_Exit() == MyApp_fail) {
+        _err = MyApp_fail;
+        return _err;
+    }
+    return _err;
+    /*
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImPlot::DestroyContext();
@@ -72,103 +84,48 @@ void MyApp::cleanUp() {
 
     glfwDestroyWindow(window);
     glfwTerminate();
+    */
 }
 
-void MyApp::mainLoop() {
-    //预定变量
-    ControlPointArray2D arr;
-    bool edit = false;
-    int it = 0;
-    float l = 0.12;
-    int me = 0;
-    int chosepoint = -1;
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        {            
-            ImGui::SetNextWindowSize(ImVec2(900,1000), ImGuiCond_Appearing);
-            ImGui::Begin("main");
-
-            if (ImPlot::BeginPlot("", "", "", ImVec2(800, 800))) {
-                if (!edit) {
-                    if (ImPlot::IsPlotHovered() and ImGui::IsMouseClicked(0) and !arr.closed()) {
-                        ImPlotPoint pt = ImPlot::GetPlotMousePos();
-                        arr.pushBack({pt.x, pt.y});
-                    }
-                    else if (ImPlot::IsPlotHovered() and ImGui::IsMouseClicked(1)) {
-                        arr.makeClose();
-                    }
-                }
-                else {
-                    if (ImPlot::IsPlotHovered() and ImGui::IsMouseClicked(0) and chosepoint==-1) {
-                        ImPlotPoint pt = ImPlot::GetPlotMousePos();
-                        chosepoint = arr.getClosePoint({pt.x, pt.y});
-                    }
-                    else if (ImPlot::IsPlotHovered() and ImGui::IsMouseClicked(0) and chosepoint != -1) {
-                        chosepoint = -1;
-                    }
-                    else if (chosepoint != -1) {
-                        ImPlotPoint pt = ImPlot::GetPlotMousePos();
-                        arr.setPos(chosepoint, {pt.x, pt.y});
-                    }
-                }
+void MyApp::mainSDLLoop() {
+    objl::Loader loader;
+    loader.LoadFile("");
+    std::vector<Triangle> triList;
+    for (auto mesh : loader.LoadedMeshes) {
+        for (int i = 0; i < mesh.Vertices.size(); i += 3) {
+            Triangle t;
+            for (int j = 0; j < 3; ++j) {
+                t.setVertex(j, { mesh.Vertices[i + j].Position.X, mesh.Vertices[i + j].Position.Y, mesh.Vertices[i + j].Position.Z });
+                t.setNormal(j, { mesh.Vertices[i + j].Normal.X, mesh.Vertices[i + j].Normal.Y, mesh.Vertices[i + j].Normal.Z });
+                t.setVertex(j, { mesh.Vertices[i + j].TextureCoordinate.X, mesh.Vertices[i + j].TextureCoordinate.Y });
             }
-            {
-                auto cp = arr.getCtrlPoint();
-                int kkk = cp.size();
-                auto dp = arr.getDrawPoint();
-
-                if (cp.size() > 0) {
-                    ImPlot::PlotLine("control points", &cp[0].x, &cp[0].y, cp.size(), 0, 2*sizeof(double));
-                    if (arr.closed()) {
-                        double l1[4] = {cp.back().x, cp.back().y, cp[0].x, cp[0].y};
-                        ImPlot::PlotLine("control points", &l1[0], &l1[1], 2, 0, 2*sizeof(double));
-                    }
-                }
-                if (dp.size() > 0) {
-                    ImPlot::PlotLine("curve", &dp[0].x, &dp[0].y, dp.size(), 0, 2*sizeof(double));
-                    if (arr.closed()) {
-                        double l1[4] = {dp.back().x, dp.back().y, dp[0].x, dp[0].y};
-                        ImPlot::PlotLine("curve", &l1[0], &l1[1], 2, 0, 2*sizeof(double));
-                    }
-                }
-
-                if (edit) {
-                    ImPlot::PlotScatter("", &cp[0].x, &cp[0].y, cp.size(), 0, 2*sizeof(double));
-                }
-
-            }
-            ImPlot::EndPlot();
-
-            ImGui::Checkbox("edit ctrl points", &edit);
-            ImGui::SameLine();
-            if (ImGui::Button("clean"))
-                arr.clear();
-            ImGui::SliderInt("curve iteration times", &it, 0, 12);
-            arr.setItTime(it);
-            ImGui::SliderFloat("interpolation para", &l, 0, 0.6f);
-            arr.setInterpolationPara(l);
-            ImGui::RadioButton("2nd B-spline", &me, 0);ImGui::SameLine();
-            ImGui::RadioButton("3rd B-spline", &me, 1);ImGui::SameLine();
-            ImGui::RadioButton("Intrtpolation", &me, 2);
-            arr.setSegmentation(Segmentation(me));
-
-            ImGui::End();
         }
+    }
+    Matrix4f model, view, proj;
+    model = rst::GetModelMatrix({ 0, 0, 0 }, 1);
+    view = rst::GetViewMatrix({ 0, 0, 5 });
+    proj = rst::GetProjMatrix(45, 1, -0.1, -50);
 
-        ImGui::Render();
-        int _width, _height;
-        glfwGetFramebufferSize(window, &_width, &_height);
-        glViewport(0, 0, _width, _height);
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    rst::SoftRasterizer r(700, 700);
+    r.SetModelMatrix(model);
+    r.SetProjectionMatrix(proj);
+    r.SetViewMatrix(view);
 
-        glfwSwapBuffers(window);
+    bool quit = false;
+    SDL_Event e;
+    while (!quit) {
+        while (SDL_PollEvent(&e) != 0) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            }
+        }
+        r.Draw(triList);
+        for (int i = 0; i < r.GetHeight(); ++i) {
+            for (int j = 0; j < r.GetWidth(); ++j) {
+                auto color = r.GetFrameBuffer();
+                SDL_SetRenderDrawColor(_renderer, color[i * r.GetWidth() + j][0], color[i * r.GetWidth() + j][1], color[i * r.GetWidth() + j][2], 1.f);
+                SDL_RenderDrawPoint(_renderer, i, j);
+            }
+        }
     }
 }
