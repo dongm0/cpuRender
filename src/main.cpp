@@ -10,7 +10,6 @@ SDL_Renderer *gRenderer = nullptr;
 const int WINDOW_WIDTH = 1200;
 const int WINDOW_HEIGHT = 700;
 
-
 bool init_sdl(int _w, int _h, const char *title) {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
     std::cerr << "Failed to init SDL. SDL error:" << std::endl;
@@ -58,11 +57,14 @@ normal_fragment_shader(rst::SoftFragmentShaderPayload payload) {
 }
 
 int main(int argc, char **argv) {
+  if (argc != 2) {
+    return 1;
+  }
   if (auto ret = init_sdl(WINDOW_WIDTH, WINDOW_HEIGHT, "test"); !ret) {
     return 1;
   }
   objl::Loader loader;
-  loader.LoadFile("spot_triangulated_good.obj");
+  loader.LoadFile(argv[1]);
   std::vector<Triangle> triList;
   for (auto &mesh : loader.LoadedMeshes) {
     for (int i = 0; i < mesh.Vertices.size(); i += 3) {
@@ -84,7 +86,8 @@ int main(int argc, char **argv) {
   rst::SoftRasterizer r(WINDOW_WIDTH, WINDOW_HEIGHT);
   r.SetModelMatrix(rst::GetModelMatrix({0, 0, 0}, 1.));
   r.SetViewMatrix(rst::GetViewMatrix({0, 0, 5}));
-  r.SetProjectionMatrix(rst::GetProjMatrix(90, WINDOW_HEIGHT*1.0/WINDOW_WIDTH, -0.1, -50));
+  r.SetProjectionMatrix(
+      rst::GetProjMatrix(90, WINDOW_HEIGHT * 1.0 / WINDOW_WIDTH, -0.1, -50));
   r.SetFragmentShader(normal_fragment_shader);
 
   r.UpdateTransform();
@@ -97,7 +100,7 @@ int main(int argc, char **argv) {
         quit = true;
       }
     }
-	SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 255);
+    SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 255);
     SDL_RenderClear(gRenderer);
     r.ClearBuffer();
     r.Draw(triList);
@@ -118,5 +121,3 @@ int main(int argc, char **argv) {
   close_sdl();
   return 0;
 }
-
-

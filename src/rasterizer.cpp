@@ -85,7 +85,7 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
     for (auto &p : proj_pos) {
       p.x() = (p.x() + 1) * 0.5 * m_width;
       p.y() = (p.y() + 1) * 0.5 * m_height;
-      //p.z() = p.z() * f1 + f2;
+      // p.z() = p.z() * f1 + f2;
     }
 
     rasterizeTriangle(newtri, proj_pos);
@@ -95,11 +95,50 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
 void rst::SoftRasterizer::rasterizeLine(Eigen::Vector4f &st,
                                         Eigen::Vector4f &ed) {}
 
-
 void rst::SoftRasterizer::rasterizeTriangle(
     const Triangle &t, std::array<Eigen::Vector4f, 3> proj_pos) {
   // simple version first, using bounding box
+  // todo: using scanline to draw triangle
+  int maxypos, midypos, minypos;
+  if (proj_pos[0].y() > proj_pos[1].y()) {
+    if (proj_pos[0].y() > proj_pos[2].y()) {
+      if (proj_pos[1].y() > proj_pos[2].y()) {
+        maxypos = 0;
+        midypos = 1;
+        minypos = 2;
+      } else {
+        maxypos = 0;
+        midypos = 2;
+        minypos = 1;
+      }
+    } else {
+      maxypos = 2;
+      midypos = 0;
+      minypos = 1;
+    }
+  } else {
+    if (proj_pos[1].y()) > proj_pos[2].y()) {
+        if (proj_pos[0].y() > proj_pos[2].y()) {
+          maxypos = 1;
+          midypos = 0;
+          minypos = 2;
+        } else {
+          maxypos = 1;
+          midypos = 2;
+          minypos = 0;
+        }
+      }
+    else {
+      maxypos = 2;
+      midypos = 1;
+      minypos = 0;
+    }
+  }
+
+  
+
   float minxf, maxxf, minyf, maxyf;
+
   minxf = std::min({proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x()});
   maxxf = std::max({proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x()});
   minyf = std::min({proj_pos[0].y(), proj_pos[1].y(), proj_pos[2].y()});
@@ -108,8 +147,8 @@ void rst::SoftRasterizer::rasterizeTriangle(
   int minx = minxf, maxx = maxxf + 1, miny = minyf, maxy = maxyf + 1;
   for (int i = minx; i < maxx; ++i) {
     for (int j = miny; j < maxy; ++j) {
-      auto [b1, b2, b3] = baryCenterCoord(i, j, proj_pos);        
-      if (b1>0 and b1<1 and b2>0 and b2<1 and b3>0 and b3<1) {
+      auto [b1, b2, b3] = baryCenterCoord(i, j, proj_pos);
+      if (b1 > 0 and b1 < 1 and b2 > 0 and b2 < 1 and b3 > 0 and b3 < 1) {
         float dp =
             proj_pos[0].z() * b1 + proj_pos[1].z() * b2 + proj_pos[2].z() * b3;
         // add a judge whether zbuffer is used.
