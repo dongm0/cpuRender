@@ -56,15 +56,19 @@ normal_fragment_shader(rst::SoftFragmentShaderPayload payload) {
   return result;
 }
 
+uint32_t lasttick = 0;
+uint32_t curtick = 0;
+float fps = 0, dt = 0;
+
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    return 1;
-  }
+  //if (argc != 2) {
+  //  return 1;
+  //}
   if (auto ret = init_sdl(WINDOW_WIDTH, WINDOW_HEIGHT, "test"); !ret) {
     return 1;
   }
   objl::Loader loader;
-  loader.LoadFile(argv[1]);
+  loader.LoadFile("bunny.obj");
   std::vector<Triangle> triList;
   for (auto &mesh : loader.LoadedMeshes) {
     for (int i = 0; i < mesh.Vertices.size(); i += 3) {
@@ -84,7 +88,7 @@ int main(int argc, char **argv) {
   }
 
   rst::SoftRasterizer r(WINDOW_WIDTH, WINDOW_HEIGHT);
-  r.SetModelMatrix(rst::GetModelMatrix({0, 0, 0}, 1.));
+  r.SetModelMatrix(rst::GetModelMatrix({0, 0, 0}, 25.));
   r.SetViewMatrix(rst::GetViewMatrix({0, 0, 5}));
   r.SetProjectionMatrix(
       rst::GetProjMatrix(90, WINDOW_HEIGHT * 1.0 / WINDOW_WIDTH, -0.1, -50));
@@ -95,6 +99,13 @@ int main(int argc, char **argv) {
   bool quit = false;
   SDL_Event e;
   while (!quit) {
+    curtick = SDL_GetTicks();
+    dt = (curtick - lasttick) * 1.f / 1000;
+    if (dt > 0) {
+      fps = 1.f / dt;
+      SDL_Log("fps: %f", fps);
+    }
+    lasttick = curtick;
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT) {
         quit = true;
