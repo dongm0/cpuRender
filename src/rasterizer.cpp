@@ -43,7 +43,7 @@ static float interpolationY(float x1, float x2, float y1, float y2, float x) {
 }
 
 static std::array<float, 4>
-calculateBaryCenterPara(std::array<Eigen::Vector4f, 3>& triangle) {
+calculateBaryCenterPara(std::array<Eigen::Vector4f, 3> &triangle) {
   std::array<float, 4> res;
   float x0 = triangle[0][0], x1 = triangle[1][0], x2 = triangle[2][0];
   float y0 = triangle[0][1], y1 = triangle[1][1], y2 = triangle[2][1];
@@ -65,7 +65,7 @@ baryCenterCoord(int i, int j, std::array<Eigen::Vector4f, 3> &triangle,
 }
 
 static bool triangleDirection(float x1, float x2, float x3, float y1, float y2,
-    float y3) {
+                              float y3) {
   Eigen::Vector3f v1(x2 - x1, y2 - y1, 0), v2(x3 - x2, y3 - y2, 0);
   return v1.cross(v2).z() > 0;
 }
@@ -99,6 +99,14 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
       p.z() /= p.w();
       p.w() = 1;
     }
+    if (proj_pos[0].x() > 1 or proj_pos[0].x() < -1 or proj_pos[0].y() > 1 or
+        proj_pos[0].y() < -1 or proj_pos[0].z() > 1 or proj_pos[0].z() < -1 or
+        proj_pos[1].x() > 1 or proj_pos[1].x() < -1 or proj_pos[1].y() > 1 or
+        proj_pos[1].y() < -1 or proj_pos[1].z() > 1 or proj_pos[1].z() < -1 or
+        proj_pos[2].x() > 1 or proj_pos[2].x() < -1 or proj_pos[2].y() > 1 or
+        proj_pos[2].y() < -1 or proj_pos[2].z() > 1 or proj_pos[2].z() < -1) {
+      continue;
+    }
 
     // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI
     // -> FRAGSHADER
@@ -112,8 +120,9 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
       p.y() = (p.y() + 1) * 0.5 * m_height;
       // p.z() = p.z() * f1 + f2;
     }
-    //if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
-    //                      proj_pos[0].y(), proj_pos[1].y(), proj_pos[2].y())) {
+    // if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
+    //                      proj_pos[0].y(), proj_pos[1].y(), proj_pos[2].y()))
+    //                      {
     //  rasterizeTriangle(newtri, proj_pos);
     //}
     rasterizeTriangle(newtri, proj_pos);
@@ -170,10 +179,13 @@ void rst::SoftRasterizer::rasterizeTriangle(
       std::tie(minx, maxx) =
           std::minmax(interpolationX(x0, x1, y0, y1, y + 0.5f),
                       interpolationX(x0, x2, y0, y2, y + 0.5f));
-    } else {
+    } else if (y > midy) {
       std::tie(minx, maxx) =
           std::minmax(interpolationX(x0, x2, y0, y2, y + 0.5f),
                       interpolationX(x1, x2, y1, y2, y + 0.5f));
+    } else {
+      std::tie(minx, maxx) =
+          std::minmax(interpolationX(x0, x2, y0, y2, y + 0.5f), x1);
     }
     for (int x = minx; x <= maxx; ++x) {
       auto [b1, b2, b3] = baryCenterCoord(x, y, proj_pos, para);

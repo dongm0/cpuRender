@@ -61,14 +61,16 @@ uint32_t curtick = 0;
 float fps = 0, dt = 0;
 
 int main(int argc, char **argv) {
-  //if (argc != 2) {
-  //  return 1;
-  //}
+#ifndef NDEBUG
+  if (argc != 2) {
+    return 1;
+  }
+#endif
   if (auto ret = init_sdl(WINDOW_WIDTH, WINDOW_HEIGHT, "test"); !ret) {
     return 1;
   }
   objl::Loader loader;
-  loader.LoadFile("bunny.obj");
+  loader.LoadFile(argc == 2 ? argv[1] : "bunny.obj");
   std::vector<Triangle> triList;
   for (auto &mesh : loader.LoadedMeshes) {
     for (int i = 0; i < mesh.Vertices.size(); i += 3) {
@@ -88,7 +90,7 @@ int main(int argc, char **argv) {
   }
 
   rst::SoftRasterizer r(WINDOW_WIDTH, WINDOW_HEIGHT);
-  r.SetModelMatrix(rst::GetModelMatrix({0, 0, 0}, 25.));
+  r.SetModelMatrix(rst::GetModelMatrix({0, 0, 0}, 1.));
   r.SetViewMatrix(rst::GetViewMatrix({0, 0, 5}));
   r.SetProjectionMatrix(
       rst::GetProjMatrix(90, WINDOW_HEIGHT * 1.0 / WINDOW_WIDTH, -0.1, -50));
