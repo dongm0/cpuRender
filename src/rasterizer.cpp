@@ -42,17 +42,32 @@ static float interpolationY(float x1, float x2, float y1, float y2, float x) {
   return (y2 - y1) * (x - x1) / (x2 - x1) + y1;
 }
 
-static std::tuple<float, float, float>
-baryCenterCoord(int i, int j, std::array<Eigen::Vector4f, 3> &triangle) {
-  float x = i + 0.5, y = j + 0.5;
+static std::array<float, 4>
+calculateBaryCenterPara(std::array<Eigen::Vector4f, 3>& triangle) {
+  std::array<float, 4> res;
   float x0 = triangle[0][0], x1 = triangle[1][0], x2 = triangle[2][0];
   float y0 = triangle[0][1], y1 = triangle[1][1], y2 = triangle[2][1];
-  float c1 = ((y - y2) * (x1 - x2) - (x - x2) * (y1 - y2)) /
-             ((y0 - y2) * (x1 - x2) - (x0 - x2) * (y1 - y2));
-  float c2 = ((y - y2) * (x0 - x2) - (x - x2) * (y0 - y2)) /
-             ((y1 - y2) * (x0 - x2) - (x1 - x2) * (y0 - y2));
+  res[0] = (x1 - x2) / ((y0 - y2) * (x1 - x2) - (x0 - x2) * (y1 - y2));
+  res[1] = (y1 - y2) / ((y0 - y2) * (x1 - x2) - (x0 - x2) * (y1 - y2));
+  res[2] = (x0 - x2) / ((y1 - y2) * (x0 - x2) - (x1 - x2) * (y0 - y2));
+  res[3] = (y0 - y2) / ((y1 - y2) * (x0 - x2) - (x1 - x2) * (y0 - y2));
+  return res;
+}
+
+static std::tuple<float, float, float>
+baryCenterCoord(int i, int j, std::array<Eigen::Vector4f, 3> &triangle,
+                std::array<float, 4> &para) {
+  float x = i + 0.5, y = j + 0.5;
+  float c1 = (y - triangle[2][1]) * para[0] - (x - triangle[2][0]) * para[1];
+  float c2 = (y - triangle[2][1]) * para[2] - (x - triangle[2][0]) * para[3];
   float c3 = 1 - c1 - c2;
   return {c1, c2, c3};
+}
+
+static bool triangleDirection(float x1, float x2, float x3, float y1, float y2,
+    float y3) {
+  Eigen::Vector3f v1(x2 - x1, y2 - y1, 0), v2(x3 - x2, y3 - y2, 0);
+  return v1.cross(v2).z() > 0;
 }
 
 void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
@@ -97,7 +112,10 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
       p.y() = (p.y() + 1) * 0.5 * m_height;
       // p.z() = p.z() * f1 + f2;
     }
-
+    //if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
+    //                      proj_pos[0].y(), proj_pos[1].y(), proj_pos[2].y())) {
+    //  rasterizeTriangle(newtri, proj_pos);
+    //}
     rasterizeTriangle(newtri, proj_pos);
   }
 }
@@ -145,6 +163,7 @@ void rst::SoftRasterizer::rasterizeTriangle(
         x2 = proj_pos[maxypos].x(), y0 = proj_pos[minypos].y(),
         y1 = proj_pos[midypos].y(), y2 = proj_pos[maxypos].y();
   int miny = y0, midy = y1, maxy = y2;
+  auto para = calculateBaryCenterPara(proj_pos);
   for (int y = miny; y <= maxy; ++y) {
     int minx, maxx;
     if (y < midy) {
@@ -157,7 +176,7 @@ void rst::SoftRasterizer::rasterizeTriangle(
                       interpolationX(x1, x2, y1, y2, y + 0.5f));
     }
     for (int x = minx; x <= maxx; ++x) {
-      auto [b1, b2, b3] = baryCenterCoord(x, y, proj_pos);
+      auto [b1, b2, b3] = baryCenterCoord(x, y, proj_pos, para);
       if (b1 >= 0 and b1 <= 1 and b2 >= 0 and b2 <= 1 and b3 >= 0 and b3 <= 1) {
         float dp =
             proj_pos[0].z() * b1 + proj_pos[1].z() * b2 + proj_pos[2].z() * b3;
