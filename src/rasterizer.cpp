@@ -1,4 +1,7 @@
 #include "rasterizer.h"
+#include "boxjudge.h"
+
+#include <bitset>
 
 static bool inTriangle(int i, int j, std::array<Eigen::Vector4f, 3> &triangle) {
   float posx = i + 0.5, posy = j + 0.5;
@@ -81,14 +84,14 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
     newtri.normal[0] = m_mvInvT * newtri.normal[0];
     newtri.normal[1] = m_mvInvT * newtri.normal[1];
     newtri.normal[2] = m_mvInvT * newtri.normal[2];
-    // clip
-    // clip finish
+
     for (auto &p : newtri.v) {
       p.x() /= p.w();
       p.y() /= p.w();
       p.z() /= p.w();
       p.w() = 1;
     }
+
     std::array<Eigen::Vector4f, 3> proj_pos;
     proj_pos[0] = m_projection * newtri.v[0];
     proj_pos[1] = m_projection * newtri.v[1];
@@ -99,41 +102,195 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
       p.z() /= p.w();
       p.w() = 1;
     }
-    if (proj_pos[0].x() > 1 or proj_pos[0].x() < -1 or proj_pos[0].y() > 1 or
-        proj_pos[0].y() < -1 or proj_pos[0].z() > 1 or proj_pos[0].z() < -1 or
-        proj_pos[1].x() > 1 or proj_pos[1].x() < -1 or proj_pos[1].y() > 1 or
-        proj_pos[1].y() < -1 or proj_pos[1].z() > 1 or proj_pos[1].z() < -1 or
-        proj_pos[2].x() > 1 or proj_pos[2].x() < -1 or proj_pos[2].y() > 1 or
-        proj_pos[2].y() < -1 or proj_pos[2].z() > 1 or proj_pos[2].z() < -1) {
-      continue;
-    }
 
     // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI
     // -> FRAGSHADER
-    // for (auto& p : newtri.v) {
-    // p.x() = (p.x() + 1) * 0.5 * m_width;
-    // p.y() = (p.y() + 1) * 0.5 * m_height;
-    // p.z() = p.z() * f1 + f2;
-    //}
+
     for (auto &p : proj_pos) {
       p.x() = (p.x() + 1) * 0.5 * m_width;
       p.y() = (p.y() + 1) * 0.5 * m_height;
-      // p.z() = p.z() * f1 + f2;
     }
-    // if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
-    //                      proj_pos[0].y(), proj_pos[1].y(), proj_pos[2].y()))
-    //                      {
-    //  rasterizeTriangle(newtri, proj_pos);
-    //}
-    rasterizeTriangle(newtri, proj_pos);
+    if (m_cull != 0) {
+      if (m_cull == 1) {
+        if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
+                              proj_pos[0].y(), proj_pos[1].y(),
+                              proj_pos[2].y())) {
+          rasterizeTriangle(newtri, proj_pos);
+        }
+      } else if (m_cull == 2) {
+        if (!triangleDirection(proj_pos[0].x(), proj_pos[1].x(),
+                               proj_pos[2].x(), proj_pos[0].y(),
+                               proj_pos[1].y(), proj_pos[2].y())) {
+          rasterizeTriangle(newtri, proj_pos);
+        }
+      }
+    } else {
+      rasterizeTriangle(newtri, proj_pos);
+    }
   }
 }
 
 void rst::SoftRasterizer::rasterizeLine(Eigen::Vector4f &st,
                                         Eigen::Vector4f &ed) {}
 
+void rst::SoftRasterizer::rasterizeTriangleWithClip(
+    Triangle &t, std::array<Eigen::Vector4f, 3> &proj_pos) {
+  std::array<std::bitset<9>, 3> vert_status;
+  for (int i = 0; i < 3; ++i) {
+    if (proj_pos[i].x() > 1) {
+      vert_status[i][1] = 1;
+    } else if (proj_pos[i].x() < -1) {
+      vert_status[i][2] = 1;
+    } else {
+      vert_status[i][0] = 1;
+    }
+
+    if (proj_pos[i].y() > 1) {
+      vert_status[i][4] = 1;
+    } else if (proj_pos[i].y() < -1) {
+      vert_status[i][5] = 1;
+    } else {
+      vert_status[i][3] = 1;
+    }
+
+    if (proj_pos[i].z() > 1) {
+      vert_status[i][7] = 1;
+    } else if (proj_pos[i].z() < -1) {
+      vert_status[i][8] = 1;
+    } else {
+      vert_status[i][6] = 1;
+    }
+  }
+  if (vert_status[0][0] and vert_status[0][3] and vert_status[0][6] and
+      vert_status[1][0] and vert_status[1][3] and vert_status[1][6] and
+      vert_status[2][0] and vert_status[2][3] and vert_status[2][6]) {
+    rasterizeTriangle(t, proj_pos);
+    return;
+  }
+  if (vert_status[0][1] and vert_status[1][1] and vert_status[2][1]) {
+    return;
+  }
+  if (vert_status[0][2] and vert_status[1][2] and vert_status[2][2]) {
+    return;
+  }
+  if (vert_status[0][4] and vert_status[1][4] and vert_status[2][4]) {
+    return;
+  }
+  if (vert_status[0][5] and vert_status[1][5] and vert_status[2][5]) {
+    return;
+  }
+  if (vert_status[0][7] and vert_status[1][7] and vert_status[2][7]) {
+    return;
+  }
+  if (vert_status[0][8] and vert_status[1][8] and vert_status[2][8]) {
+    return;
+  }
+  // only clip znear face
+  int num_out = 0;
+  std::vector<int> vert_num;
+  for (int i = 0; i < 3; ++i) {
+    if (vert_status[i][7]) {
+      num_out += 1;
+    }
+  }
+  if (num_out == 1) {
+    //  p1----------p0
+    //  \ nt1       /
+    //   \     nt2 /
+    //    np2-----np1
+    //     \     /
+    //      \   /
+    //       \ /
+    //        p2
+    int _s0, _s1, _s2;
+    for (int i = 0; i < 3; ++i) {
+      if (vert_status[(i + 2) % 3][7]) {
+        _s0 = i, _s1 = (i + 1) % 3, _s2 = (i + 2) % 3;
+        break;
+      }
+    }
+    mPoint p0{t.v[_s0].x(), t.v[_s0].y(), t.v[_s0].z()};
+    mPoint p1{t.v[_s1].x(), t.v[_s1].y(), t.v[_s1].z()};
+    mPoint p2{t.v[_s2].x(), t.v[_s2].y(), t.v[_s2].z()};
+    auto np1 = rayCrossZFace(p0, p2, 1);
+    auto np2 = rayCrossZFace(p1, p2, 1);
+    float para1 = (np1.x - p0.x) / (p2.x - p0.x);
+    float para2 = (np2.x - p1.x) / (p2.x - p1.x);
+    Triangle nt1 = t, nt2 = t;
+    nt1.setVertex(_s2, {np2.x, np2.y, np2.z});
+    nt1.color[_s2] = t.color[_s1] * para2 + t.color[_s2] * (1 - para2);
+    nt1.normal[_s2] = t.normal[_s1] * para2 + t.normal[_s2] * (1 - para2);
+    nt1.color[_s2] = t.color[_s1] * para2 + t.color[_s2] * (1 - para2);
+    nt1.uv[_s2] = t.uv[_s1] * para2 + t.uv[_s2] * (1 - para2);
+
+    nt2.setVertex(_s1, {np2.x, np2.y, np2.z});
+    nt2.color[_s1] = t.color[_s1] * para2 + t.color[_s2] * (1 - para2);
+    nt2.normal[_s1] = t.normal[_s1] * para2 + t.normal[_s2] * (1 - para2);
+    nt2.color[_s1] = t.color[_s1] * para2 + t.color[_s2] * (1 - para2);
+    nt2.uv[_s1] = t.uv[_s1] * para2 + t.uv[_s2] * (1 - para2);
+
+    nt2.setVertex(_s2, {np1.x, np1.y, np1.z});
+    nt2.color[_s2] = t.color[_s0] * para1 + t.color[_s2] * (1 - para1);
+    nt2.normal[_s2] = t.normal[_s0] * para1 + t.normal[_s2] * (1 - para1);
+    nt2.color[_s2] = t.color[_s0] * para1 + t.color[_s2] * (1 - para1);
+    nt2.uv[_s2] = t.uv[_s0] * para1 + t.uv[_s2] * (1 - para1);
+
+    std::array<Eigen::Vector4f, 3> proj_pos1{
+        proj_pos[_s0], proj_pos[_s1], {np2.x, np2.y, np2.z, 1.f}};
+    std::array<Eigen::Vector4f, 3> proj_pos2{
+        proj_pos[_s0], {np2.x, np2.y, np2.z, 1.f}, {np1.x, np1.y, np1.z, 1.f}};
+
+    rasterizeTriangle(nt1, proj_pos1);
+    rasterizeTriangle(nt2, proj_pos2);
+  } else if (num_out == 2) {
+    //       p0
+    //      / \
+    //     /   \
+    //    np1--np2
+    //   /       \
+    //  /         \
+    // p1----------p2
+    int _s0, _s1, _s2;
+    for (int i = 0; i < 3; ++i) {
+      if (vert_status[(i + 1) % 3][7] and vert_status[(i + 2) % 3][7]) {
+        _s0 = i, _s1 = (i + 1) % 3, _s2 = (i + 2) % 3;
+        break;
+      }
+    }
+    mPoint p0{t.v[_s0].x(), t.v[_s0].y(), t.v[_s0].z()};
+    mPoint p1{t.v[_s1].x(), t.v[_s1].y(), t.v[_s1].z()};
+    mPoint p2{t.v[_s2].x(), t.v[_s2].y(), t.v[_s2].z()};
+    auto np1 = rayCrossZFace(p0, p1, 1);
+    auto np2 = rayCrossZFace(p0, p2, 1);
+    float para1 = (np1.x - p0.x) / (p1.x - p0.x);
+    float para2 = (np2.x - p0.x) / (p2.x - p0.x);
+
+    t.setVertex(_s1, {np1.x, np1.y, np1.z});
+    t.color[_s1] = t.color[_s0] * para1 + t.color[_s1] * (1 - para1);
+    t.normal[_s1] = t.normal[_s0] * para1 + t.normal[_s1] * (1 - para1);
+    t.color[_s1] = t.color[_s0] * para1 + t.color[_s1] * (1 - para1);
+    t.uv[_s1] = t.uv[_s0] * para1 + t.uv[_s1] * (1 - para1);
+
+    t.setVertex(_s2, {np2.x, np2.y, np2.z});
+    t.color[_s2] = t.color[_s0] * para2 + t.color[_s2] * (1 - para2);
+    t.normal[_s2] = t.normal[_s0] * para2 + t.normal[_s2] * (1 - para2);
+    t.color[_s2] = t.color[_s0] * para2 + t.color[_s2] * (1 - para2);
+    t.uv[_s2] = t.uv[_s0] * para2 + t.uv[_s2] * (1 - para2);
+
+    std::array<Eigen::Vector4f, 3> proj_pos_new{
+        proj_pos[_s0], {np1.x, np1.y, np1.z, 1.f}, {np2.x, np2.y, np2.z, 1.f}};
+
+    rasterizeTriangle(t, proj_pos_new);
+
+  } else {
+#ifndef NDEBUG
+    throw std::runtime_error("num of vert out of znear face error!");
+#endif
+  }
+}
+
 void rst::SoftRasterizer::rasterizeTriangle(
-    const Triangle &t, std::array<Eigen::Vector4f, 3> proj_pos) {
+    const Triangle &t, std::array<Eigen::Vector4f, 3> &proj_pos) {
   int maxypos, midypos, minypos;
   if (proj_pos[0].y() > proj_pos[1].y()) {
     if (proj_pos[0].y() > proj_pos[2].y()) {
@@ -174,6 +331,9 @@ void rst::SoftRasterizer::rasterizeTriangle(
   int miny = y0, midy = y1, maxy = y2;
   auto para = calculateBaryCenterPara(proj_pos);
   for (int y = miny; y <= maxy; ++y) {
+    if (y >= m_height or y < 0) {
+      continue;
+    }
     int minx, maxx;
     if (y < midy) {
       std::tie(minx, maxx) =
@@ -188,6 +348,9 @@ void rst::SoftRasterizer::rasterizeTriangle(
           std::minmax(interpolationX(x0, x2, y0, y2, y + 0.5f), x1);
     }
     for (int x = minx; x <= maxx; ++x) {
+      if (x < 0 or x >= m_width) {
+        continue;
+      }
       auto [b1, b2, b3] = baryCenterCoord(x, y, proj_pos, para);
       if (b1 >= 0 and b1 <= 1 and b2 >= 0 and b2 <= 1 and b3 >= 0 and b3 <= 1) {
         float dp =

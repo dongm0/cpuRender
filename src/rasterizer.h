@@ -9,9 +9,9 @@
 #include <Eigen/Eigen>
 
 // stl
-#include <vector>
-#include <optional>
 #include <functional>
+#include <optional>
+#include <vector>
 
 #include "triangle.h"
 
@@ -90,9 +90,14 @@ private:
   std::vector<Eigen::Vector3f> m_frameBuffer;
   std::vector<float> m_depthBuffer;
 
+  // 0: no cull 1: z forward 2: z backward
+  const uint8_t m_cull = 0;
+
 private:
+  void rasterizeTriangleWithClip(Triangle &t,
+                                 std::array<Eigen::Vector4f, 3> &proj_pos);
   void rasterizeTriangle(const Triangle &t,
-                         std::array<Eigen::Vector4f, 3> view_pos);
+                         std::array<Eigen::Vector4f, 3> &proj_pos);
   void rasterizeLine(Eigen::Vector4f &st, Eigen::Vector4f &ed);
 };
 

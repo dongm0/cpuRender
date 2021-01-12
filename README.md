@@ -8,12 +8,11 @@
 - 扫描线画三角形
 - 背面剔除
 - 矩阵运算用的eigen
-- 最简单的裁减（只要在外面就裁），准备接下来抄[tiny3D](https://github.com/sdlwlxf1/tinyEngine)的裁剪
+- 对znear平面的裁剪（可能需要重写）
 
 ### Todo
 
-- 三角形裁剪
 - 画线段
 - （可能的）上采样
-- 边缘判断
+- 边缘判断（schewchuk判据）
 - 其余（纹理，光照，shader，等等放到下次写gpu渲染器的时候写）
