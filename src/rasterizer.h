@@ -91,7 +91,7 @@ private:
   std::vector<float> m_depthBuffer;
 
   // 0: no cull 1: z forward 2: z backward
-  const uint8_t m_cull = 0;
+  const uint8_t m_cull = 1;
 
 private:
   void rasterizeTriangleWithClip(Triangle &t,
