@@ -7,7 +7,7 @@
 SDL_Window *gWindow = nullptr;
 SDL_Renderer *gRenderer = nullptr;
 
-const int WINDOW_WIDTH = 1200;
+const int WINDOW_WIDTH = 700;
 const int WINDOW_HEIGHT = 700;
 
 bool init_sdl(int _w, int _h, const char *title) {
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   objl::Loader loader;
-  loader.LoadFile(argc == 2 ? argv[1] : "bunny.obj");
+  loader.LoadFile(argc == 2 ? argv[1] : "./model/face.obj");
   std::vector<Triangle> triList;
   for (auto &mesh : loader.LoadedMeshes) {
     for (int i = 0; i < mesh.Vertices.size(); i += 3) {

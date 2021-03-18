@@ -1,7 +1,7 @@
 SOURCE_DIR = ./src/
 INCLUDE = -I /usr/include/eigen3 -I /usr/include/SDL2 -I ./src
 SHARED_LIB = -lSDL2
-CXX_FLAGS = -std=c++17 -O2
+CXX_FLAGS = -std=c++17 -O3
 
 
 cpuRenderer: rasterizer.o

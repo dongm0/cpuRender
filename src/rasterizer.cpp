@@ -2,6 +2,7 @@
 #include "boxjudge.h"
 
 #include <bitset>
+#include <iostream>
 
 static bool inTriangle(int i, int j, std::array<Eigen::Vector4f, 3> &triangle) {
   float posx = i + 0.5, posy = j + 0.5;
@@ -57,14 +58,23 @@ calculateBaryCenterPara(std::array<Eigen::Vector4f, 3> &triangle) {
   return res;
 }
 
-static std::tuple<float, float, float>
-baryCenterCoord(int i, int j, std::array<Eigen::Vector4f, 3> &triangle,
-                std::array<float, 4> &para) {
+static std::tuple<float, float, float, float>
+baryCenterCoordWithDepth(int i, int j, const Triangle &t,
+                         std::array<Eigen::Vector4f, 3> &triangle,
+                         std::array<float, 4> &para) {
   float x = i + 0.5, y = j + 0.5;
   float c1 = (y - triangle[2][1]) * para[0] - (x - triangle[2][0]) * para[1];
   float c2 = (y - triangle[2][1]) * para[2] - (x - triangle[2][0]) * para[3];
   float c3 = 1 - c1 - c2;
-  return {c1, c2, c3};
+  float depth = 1.0 / (c1 / t.v[0][2] + c1 / t.v[1][2] + c2 / t.v[2][2]);
+  return {c1, c2, c3, depth};
+}
+
+template <typename T>
+static inline T interpolationWithDepthCorrection(float c1, float c2, float c3,
+                                                 T v1, T v2, T v3, float z1,
+                                                 float z2, float z3, float z) {
+  return (c1 * v1 / z1 + c2 * v2 / z2 + c3 * v3 / z3) * z;
 }
 
 static bool triangleDirection(float x1, float x2, float x3, float y1, float y2,
@@ -106,26 +116,22 @@ void rst::SoftRasterizer::Draw(std::vector<Triangle> tri_list) {
     // VERTEX SHADER -> MVP -> Clipping -> /.W -> VIEWPORT -> DRAWLINE/DRAWTRI
     // -> FRAGSHADER
 
-    for (auto &p : proj_pos) {
-      p.x() = (p.x() + 1) * 0.5 * m_width;
-      p.y() = (p.y() + 1) * 0.5 * m_height;
-    }
     if (m_cull != 0) {
       if (m_cull == 1) {
         if (triangleDirection(proj_pos[0].x(), proj_pos[1].x(), proj_pos[2].x(),
                               proj_pos[0].y(), proj_pos[1].y(),
                               proj_pos[2].y())) {
-          rasterizeTriangle(newtri, proj_pos);
+          rasterizeTriangleWithClip(newtri, proj_pos);
         }
       } else if (m_cull == 2) {
         if (!triangleDirection(proj_pos[0].x(), proj_pos[1].x(),
                                proj_pos[2].x(), proj_pos[0].y(),
                                proj_pos[1].y(), proj_pos[2].y())) {
-          rasterizeTriangle(newtri, proj_pos);
+          rasterizeTriangleWithClip(newtri, proj_pos);
         }
       }
     } else {
-      rasterizeTriangle(newtri, proj_pos);
+      rasterizeTriangleWithClip(newtri, proj_pos);
     }
   }
 }
@@ -161,11 +167,9 @@ void rst::SoftRasterizer::rasterizeTriangleWithClip(
       vert_status[i][6] = 1;
     }
   }
-  if (vert_status[0][0] and vert_status[0][3] and vert_status[0][6] and
-      vert_status[1][0] and vert_status[1][3] and vert_status[1][6] and
-      vert_status[2][0] and vert_status[2][3] and vert_status[2][6]) {
-    rasterizeTriangle(t, proj_pos);
-    return;
+  for (auto &p : proj_pos) {
+    p.x() = (p.x() + 1) * 0.5 * m_width;
+    p.y() = (p.y() + 1) * 0.5 * m_height;
   }
   if (vert_status[0][1] and vert_status[1][1] and vert_status[2][1]) {
     return;
@@ -283,9 +287,7 @@ void rst::SoftRasterizer::rasterizeTriangleWithClip(
     rasterizeTriangle(t, proj_pos_new);
 
   } else {
-#ifndef NDEBUG
-    throw std::runtime_error("num of vert out of znear face error!");
-#endif
+    rasterizeTriangle(t, proj_pos);
   }
 }
 
@@ -351,18 +353,23 @@ void rst::SoftRasterizer::rasterizeTriangle(
       if (x < 0 or x >= m_width) {
         continue;
       }
-      auto [b1, b2, b3] = baryCenterCoord(x, y, proj_pos, para);
+      auto [b1, b2, b3, d] = baryCenterCoordWithDepth(x, y, t, proj_pos, para);
       if (b1 >= 0 and b1 <= 1 and b2 >= 0 and b2 <= 1 and b3 >= 0 and b3 <= 1) {
-        float dp =
-            proj_pos[0].z() * b1 + proj_pos[1].z() * b2 + proj_pos[2].z() * b3;
         // add a judge whether zbuffer is used.
-        if (dp > m_depthBuffer[y * m_width + x]) {
-          m_depthBuffer[y * m_width + x] = dp;
-          auto p_pos = t.v[0] * b1 + t.v[1] * b2 + t.v[2] * b3;
-          auto p_color = t.color[0] * b1 + t.color[1] * b2 + t.color[2] * b2;
-          auto p_normal =
-              t.normal[0] * b1 + t.normal[1] * b2 + t.normal[2] * b3;
-          auto p_uv = t.uv[0] * b1 + t.uv[1] * b2 + t.uv[2] * b3;
+        if (d > m_depthBuffer.at(y * m_width + x)) {
+          m_depthBuffer.at(y * m_width + x) = d;
+          auto p_pos = interpolationWithDepthCorrection(
+              b1, b2, b3, t.v[0], t.v[1], t.v[2], t.v[0][2], t.v[1][2],
+              t.v[2][2], d);
+          auto p_color = interpolationWithDepthCorrection(
+              b1, b2, b3, t.color[0], t.color[1], t.color[2], t.v[0][2],
+              t.v[1][2], t.v[2][2], d);
+          auto p_normal = interpolationWithDepthCorrection(
+              b1, b2, b3, t.normal[0], t.normal[1], t.normal[2], t.v[0][2],
+              t.v[1][2], t.v[2][2], d);
+          auto p_uv = interpolationWithDepthCorrection(
+              b1, b2, b3, t.uv[0], t.uv[1], t.uv[2], t.v[0][2], t.v[1][2],
+              t.v[2][2], d);
           SoftFragmentShaderPayload payload(p_pos.head<3>(), p_color,
                                             p_normal.head<3>(), p_uv);
           auto pixel = fragmentShader(payload);
